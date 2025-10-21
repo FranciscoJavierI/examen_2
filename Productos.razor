@@ -1,0 +1,259 @@
+﻿@page "/productos"
+@rendermode InteractiveServer
+
+<h3>Inventario</h3>
+
+<div style="padding: 10px; border: 1px solid #ccc; border-radius: 5px; max-width: 500px;">
+
+    <div>
+        <label>Cantidad:</label>
+        <input type="number" @bind="inventarioInput" style="width: 100%;" />
+        <span style="color: red; font-size: 0.9em;">@errorInventario</span>
+    </div>
+    <br />
+
+    <div>
+        <label>Producto:</label>
+        <input type="text" @bind="nombreInput" style="width: 100%;" />
+        <span style="color: red; font-size: 0.9em;">@errorNombre</span>
+    </div>
+    <br />
+
+    <div>
+        <label>Tipo de producto:</label>
+        <div>
+            @foreach (var depto in departamentos)
+            {
+                <label style="margin-right: 15px;">
+                    <input type="radio" name="depto"
+                           checked="@(departamentoInput == depto)"
+                           @onchange="@(() => departamentoInput = depto)" />
+                    @depto
+                </label>
+            }
+        </div>
+        <span style="color: red; font-size: 0.9em;">@errorDepartamento</span>
+    </div>
+    <br />
+
+    <span style="color: red; font-weight: bold;">@errorGeneral</span>
+    <br />
+
+    <div>
+        @if (productoAEditar == null)
+        {
+            <button @onclick="GuardarProducto" style="background-color: #007bff; color: white; border: none; padding: 8px 12px;">Guardar</button>
+        }
+        else
+        {
+            <button @onclick="ActualizarProducto" style="background-color: #28a745; color: white; border: none; padding: 8px 12px;">Actualizar</button>
+            <button @onclick="CancelarEdicion" style="background-color: #6c757d; color: white; border: none; padding: 8px 12px; margin-left: 10px;">Cancelar</button>
+        }
+
+        <button @onclick="ToggleExistencias" style="background-color: #17a2b8; color: white; border: none; padding: 8px 12px; margin-left: 20px;">
+            @(mostrandoExistencias ? "Ver Lista" : "Existencias")
+        </button>
+    </div>
+
+</div>
+
+<hr />
+
+@if (mostrandoExistencias)
+{
+    <h4>Concentrado de Existencias</h4>
+    <ul style="font-size: 1.2em;">
+        <li>Frutas: @TotalFrutas</li>
+        <li>Verduras: @TotalVerduras</li>
+        <li>Lácteos: @TotalLacteos</li>
+    </ul>
+}
+else
+{
+    <h4>Productos en existencia</h4>
+
+    @if (listaProductos.Count > 0)
+    {
+        <table border="1" style="width: 80%; border-collapse: collapse;">
+            <thead style="background-color: #f4f4f4;">
+                <tr>
+                    <th style="padding: 8px;">Inventario</th>
+                    <th style="padding: 8px;">Nombre</th>
+                    <th style="padding: 8px;">Departamento</th>
+                    <th style="padding: 8px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var prod in listaProductos)
+                {
+                    <tr>
+                        <td style="padding: 8px;">@prod.Inventario</td>
+                        <td style="padding: 8px;">@prod.Nombre</td>
+                        <td style="padding: 8px;">@prod.Departamento</td>
+                        <td style="padding: 8px; text-align: center;">
+                            <button @onclick="@(() => CargarParaEditar(prod))">Editar</button>
+                            <button @onclick="@(() => EliminarProducto(prod))" style="margin-left: 5px;">Eliminar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>No hay productos registrados.</p>
+    }
+}
+
+
+@code {
+    public class Producto
+    {
+        public int Inventario { get; set; }
+        public string Nombre { get; set; }
+        public string Departamento { get; set; }
+    }
+
+    private List<Producto> listaProductos = new List<Producto>();
+    private string[] departamentos = { "Frutas", "Verduras", "Lácteos" };
+
+    private int inventarioInput;
+    private string nombreInput = "";
+    private string departamentoInput = "";
+
+    private string errorInventario = "";
+    private string errorNombre = "";
+    private string errorDepartamento = "";
+    private string errorGeneral = "";
+
+    private bool mostrandoExistencias = false;
+    private Producto productoAEditar = null;
+
+    private int TotalFrutas => listaProductos.Where(p => p.Departamento == "Frutas").Sum(p => p.Inventario);
+    private int TotalVerduras => listaProductos.Where(p => p.Departamento == "Verduras").Sum(p => p.Inventario);
+    private int TotalLacteos => listaProductos.Where(p => p.Departamento == "Lácteos").Sum(p => p.Inventario);
+
+    private bool ValidarFormulario(bool esNuevo)
+    {
+        errorInventario = "";
+        errorNombre = "";
+        errorDepartamento = "";
+        errorGeneral = "";
+        bool esValido = true;
+
+        if (inventarioInput <= 0)
+        {
+            errorInventario = "Debe ser entero positivo mayor a 0";
+            esValido = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(nombreInput))
+        {
+            errorNombre = "El nombre no debe ser vacio";
+            esValido = false;
+        }
+        else if (nombreInput.Length > 200)
+        {
+            errorNombre = "El nombre no debe exceder 200 caracteres";
+            esValido = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(departamentoInput))
+        {
+            errorDepartamento = "Debe seleccionar departamento";
+            esValido = false;
+        }
+
+        if (esNuevo)
+        {
+            if (listaProductos.Any(p => p.Inventario == inventarioInput))
+            {
+                errorGeneral = "El número de inventario ya existe. No se permiten repetidos.";
+                esValido = false;
+            }
+        }
+        else
+        {
+            if (listaProductos.Any(p => p.Inventario == inventarioInput && p != productoAEditar))
+            {
+                errorGeneral = "Ese número de inventario ya pertenece a otro producto.";
+                esValido = false;
+            }
+        }
+
+        return esValido;
+    }
+
+    private void GuardarProducto()
+    {
+        if (ValidarFormulario(esNuevo: true))
+        {
+            var nuevoProducto = new Producto
+            {
+                Inventario = inventarioInput,
+                Nombre = nombreInput,
+                Departamento = departamentoInput
+            };
+
+            listaProductos.Add(nuevoProducto);
+
+            LimpiarFormulario();
+        }
+    }
+
+    private void ActualizarProducto()
+    {
+        if (ValidarFormulario(esNuevo: false))
+        {
+            productoAEditar.Inventario = inventarioInput;
+            productoAEditar.Nombre = nombreInput;
+            productoAEditar.Departamento = departamentoInput;
+
+            LimpiarFormulario();
+        }
+    }
+
+    private void LimpiarFormulario()
+    {
+        inventarioInput = 0;
+        nombreInput = "";
+        departamentoInput = "";
+        productoAEditar = null;
+
+        errorInventario = "";
+        errorNombre = "";
+        errorDepartamento = "";
+        errorGeneral = "";
+    }
+
+    private void CancelarEdicion()
+    {
+        LimpiarFormulario();
+    }
+
+    private void CargarParaEditar(Producto prod)
+    {
+        productoAEditar = prod;
+        inventarioInput = prod.Inventario;
+        nombreInput = prod.Nombre;
+        departamentoInput = prod.Departamento;
+
+        mostrandoExistencias = false;
+        errorGeneral = "";
+    }
+
+    private void EliminarProducto(Producto prod)
+    {
+        listaProductos.Remove(prod);
+    }
+
+    private void ToggleExistencias()
+    {
+        mostrandoExistencias = !mostrandoExistencias;
+
+        if (mostrandoExistencias)
+        {
+            CancelarEdicion();
+        }
+    }
+}
